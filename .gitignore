@@ -1,0 +1,5 @@
+data/raw/
+*.fasta.gz
+*.bam
+*.h5ad
+.env
