@@ -1,0 +1,7 @@
+# Example MultiQC template for BRB Pipeline
+# Replace placeholders as needed for your project.
+
+report_name: "${library_name} QC Report"
+
+# MultiQC configuration content goes here.
+# Use this file as a template for Stage 2 MultiQC execution.

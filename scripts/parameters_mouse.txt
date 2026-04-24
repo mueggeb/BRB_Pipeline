@@ -1,0 +1,1 @@
+/ref/rmlab/data/references/Mus_musculus/Ensembl/GRCm38/Sequence/STAR_2.7.6a,/ref/rmlab/data/references/Mus_musculus/Ensembl/GRCm38/Annotation/Genes/genes.gtf,/ref/rmlab/data/references/Mus_musculus/Ensembl/GRCm38/Annotation/Genes/genes.bed,TRUE,TRUE

@@ -1,0 +1,29 @@
+# Example BRB pipeline configuration
+
+project:
+  name: example_run
+  output_dir: /path/to/project_dir
+
+reference:
+  species: mouse
+  star_index: /path/to/STAR/index
+  gtf: /path/to/genes.gtf
+  bed: /path/to/genes.bed
+
+processing:
+  demultiplex: true
+  remove_intermediate: true
+
+mapping_file: /path/to/mapping_file.tsv
+
+reads:
+  read1: /path/to/shared_read1.fastq.gz
+  read2: /path/to/shared_read2.fastq.gz
+
+multiqc:
+  library_name: example_library
+  config_template: /path/to/multiqc_template.yaml
+
+slurm:
+  cpus_per_task: 4
+  mem: 75000

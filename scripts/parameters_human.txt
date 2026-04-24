@@ -1,0 +1,1 @@
+/ref/rmlab/data/references/Homo_sapiens/Ensembl/GRCh37/Sequence/STAR_2.7.6a,/ref/rmlab/data/references/Homo_sapiens/Ensembl/GRCh37/Annotation/Genes/genes.gtf,/ref/rmlab/data/references/Homo_sapiens/Ensembl/GRCh37/Annotation/Genes/genes.bed,TRUE,TRUE

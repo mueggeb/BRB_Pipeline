@@ -8,7 +8,7 @@ sample barcodes for multiplexing.
 ## Pipeline Architecture
 Two-stage design — preserve this structure during refactoring:
 
-**Stage 1 (per-sample, SLURM array):** brb_pipeline.sh
+**Stage 1 (per-sample, SLURM array):** scripts/BRB_Seq_Muegge_241112_TwoStage_noMulti.sh
   - Optional demultiplexing by RT barcode (cutadapt)
   - FastQC on raw reads
   - Adapter trimming (cutadapt)
@@ -19,7 +19,7 @@ Two-stage design — preserve this structure during refactoring:
   - RSeQC + Qualimap QC
   - Optional cleanup of intermediates
 
-**Stage 2 (aggregation, runs after all samples complete):** brb_multiqc.sh
+**Stage 2 (aggregation, runs after all samples complete):** scripts/BRB_MultiQC_FullRun_240116.sh
   - Merge per-sample count matrices → single count matrix
   - Merge per-sample log files → single summary table
   - MultiQC report generation
@@ -43,7 +43,7 @@ rather than requiring manual path entry.
 1. Translate bash logic to Python — no new features
 2. Replace SPACK loads with mamba environment
 3. Consolidate mapping file + parameters CSV into single YAML config
-4. Add reference genome selection by name (mouse/human)
+4. Add reference genome selection by name or build (mouse/human, or GENCODE/ENSEMBL)
 5. Improve error handling and logging
 
 ## Out of Scope (future work)
