@@ -262,6 +262,76 @@ def trim_adapters(read2_path, sample_name, project_dir, cpus_per_task):
     return output_trimmed
 
 
+def trim_polyA(read2_path, sample_name, project_dir, cpus_per_task):
+    """
+    Trim polyA homopolymer sequence from adapter-trimmed Read 2 using cutadapt.
+
+    Matches the original bash command:
+        cutadapt \
+            --adapter="A{30}" \
+            --overlap=15 \
+            --minimum-length=25 \
+            -o ${PROJECT_DIR}/cutadapt/${samplename}_trimmed.fq.gz \
+            -j ${SLURM_CPUS_PER_TASK} \
+            ${PROJECT_DIR}/cutadapt/${samplename}_temp_trimmed.fq.gz \
+            >${PROJECT_DIR}/cutadapt/${samplename}_polyA.log
+
+    Parameters
+    ----------
+    read2_path : str or Path
+        Path to the adapter-trimmed Read 2 FASTQ file.
+    sample_name : str
+        Sample name used for output and log file naming.
+    project_dir : str or Path
+        Project directory where cutadapt outputs are written.
+    cpus_per_task : int
+        Number of CPU cores to pass to cutadapt.
+
+    Returns
+    -------
+    Path
+        Path to the polyA-trimmed FASTQ file.
+
+    Raises
+    ------
+    RuntimeError
+        If cutadapt command fails.
+    """
+    project_dir = Path(project_dir)
+    cutadapt_dir = project_dir / "cutadapt"
+    cutadapt_dir.mkdir(parents=True, exist_ok=True)
+
+    read2_path = Path(read2_path)
+    output_trimmed = cutadapt_dir / f"{sample_name}_trimmed.fq.gz"
+    log_file = cutadapt_dir / f"{sample_name}_polyA.log"
+
+    cmd = [
+        "cutadapt",
+        "--adapter=A{30}",
+        "--overlap=15",
+        "--minimum-length=25",
+        "-o", str(output_trimmed),
+        "-j", str(cpus_per_task),
+        str(read2_path),
+    ]
+
+    logger.info(f"Running polyA trimming on {read2_path}")
+    try:
+        with open(log_file, "w") as log_fh:
+            subprocess.run(
+                cmd,
+                stdout=log_fh,
+                stderr=subprocess.STDOUT,
+                check=True,
+                text=True,
+            )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"PolyA trimming failed for {read2_path}: {e}")
+
+    logger.info(f"PolyA trimming complete, output: {output_trimmed}")
+    return output_trimmed
+
+
 def main(config_path, sample_index):
     """Run stage 1 for a single sample."""
     raise NotImplementedError("stage1 logic not implemented yet")
