@@ -194,6 +194,74 @@ def run_fastqc(read2_path, sample_name, project_dir, cpus_per_task):
     return fastqc_dir
 
 
+def trim_adapters(read2_path, sample_name, project_dir, cpus_per_task):
+    """
+    Trim adapters and short reads from demultiplexed Read 2 using cutadapt.
+
+    Matches the original bash command:
+        cutadapt \
+            --adapter=AGATCGGAAGAG \
+            --minimum-length=25 \
+            -o ${PROJECT_DIR}/cutadapt/${samplename}_temp_trimmed.fq.gz \
+            -j ${SLURM_CPUS_PER_TASK} \
+            $read2 \
+            >${PROJECT_DIR}/cutadapt/${samplename}_AdapterTrim.log
+
+    Parameters
+    ----------
+    read2_path : str or Path
+        Path to the demultiplexed Read 2 FASTQ file.
+    sample_name : str
+        Sample name used for output and log file naming.
+    project_dir : str or Path
+        Project directory where cutadapt outputs are written.
+    cpus_per_task : int
+        Number of CPU cores to pass to cutadapt.
+
+    Returns
+    -------
+    Path
+        Path to the adapter-trimmed FASTQ file.
+
+    Raises
+    ------
+    RuntimeError
+        If cutadapt command fails.
+    """
+    project_dir = Path(project_dir)
+    cutadapt_dir = project_dir / "cutadapt"
+    cutadapt_dir.mkdir(parents=True, exist_ok=True)
+
+    read2_path = Path(read2_path)
+    output_trimmed = cutadapt_dir / f"{sample_name}_temp_trimmed.fq.gz"
+    log_file = cutadapt_dir / f"{sample_name}_AdapterTrim.log"
+
+    cmd = [
+        "cutadapt",
+        "--adapter=AGATCGGAAGAG",
+        "--minimum-length=25",
+        "-o", str(output_trimmed),
+        "-j", str(cpus_per_task),
+        str(read2_path),
+    ]
+
+    logger.info(f"Running adapter trimming on {read2_path}")
+    try:
+        with open(log_file, "w") as log_fh:
+            subprocess.run(
+                cmd,
+                stdout=log_fh,
+                stderr=subprocess.STDOUT,
+                check=True,
+                text=True,
+            )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Adapter trimming failed for {read2_path}: {e}")
+
+    logger.info(f"Adapter trimming complete, output: {output_trimmed}")
+    return output_trimmed
+
+
 def main(config_path, sample_index):
     """Run stage 1 for a single sample."""
     raise NotImplementedError("stage1 logic not implemented yet")
