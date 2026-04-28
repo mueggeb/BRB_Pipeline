@@ -135,6 +135,65 @@ def demultiplex_by_barcode(barcode, sample_name, index1_paths, index2_paths,
     return final_output
 
 
+def run_fastqc(read2_path, sample_name, project_dir, cpus_per_task):
+    """
+    Run FastQC on Read 2 input.
+
+    Matches the original bash command:
+        fastqc -t ${SLURM_CPUS_PER_TASK} -o ${PROJECT_DIR}/fastqc/ $read2
+
+    Parameters
+    ----------
+    read2_path : str or Path
+        Path to the demultiplexed Read 2 FASTQ file.
+    sample_name : str
+        Sample name for naming stderr log file.
+    project_dir : str or Path
+        Project directory where FastQC output is written.
+    cpus_per_task : int
+        Number of CPU cores to pass to FastQC.
+
+    Returns
+    -------
+    Path
+        Path to the FastQC output directory.
+
+    Raises
+    ------
+    RuntimeError
+        If the FastQC command fails.
+    """
+    project_dir = Path(project_dir)
+    fastqc_dir = project_dir / "fastqc"
+    fastqc_dir.mkdir(parents=True, exist_ok=True)
+
+    read2_path = Path(read2_path)
+    stderr_path = fastqc_dir / f"{sample_name}_fastq.sterr.txt"
+
+    cmd = [
+        "fastqc",
+        "-t", str(cpus_per_task),
+        "-o", str(fastqc_dir),
+        str(read2_path),
+    ]
+
+    logger.info(f"Running FastQC on {read2_path} with {cpus_per_task} threads")
+
+    try:
+        with open(stderr_path, "w") as stderr_fh:
+            subprocess.run(
+                cmd,
+                stderr=stderr_fh,
+                check=True,
+                text=True,
+            )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"FastQC failed for {read2_path}: {e}")
+
+    logger.info(f"FastQC complete, output directory: {fastqc_dir}")
+    return fastqc_dir
+
+
 def main(config_path, sample_index):
     """Run stage 1 for a single sample."""
     raise NotImplementedError("stage1 logic not implemented yet")
