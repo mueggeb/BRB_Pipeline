@@ -529,6 +529,123 @@ def run_fastqc_post_alignment(sample_name, project_dir, cpus_per_task):
     return fastqc_dir
 
 
+def run_bam_stat(sample_name, project_dir):
+    """
+    Run bam_stat.py to collect BAM alignment statistics.
+
+    Matches the original bash command:
+        bam_stat.py -i ${PROJECT_DIR}/STAR/${samplename}_Aligned.sortedByCoord.out.bam \
+            >${PROJECT_DIR}/RSeQC/${samplename}_bam_stats_out.txt \
+            2> /dev/null
+
+    Parameters
+    ----------
+    sample_name : str
+        Sample name used in STAR and RSeQC output files.
+    project_dir : str or Path
+        Project directory containing STAR outputs and RSeQC output folder.
+
+    Returns
+    -------
+    Path
+        Path to the bam_stat output text file.
+
+    Raises
+    ------
+    RuntimeError
+        If bam_stat.py fails.
+    """
+    project_dir = Path(project_dir)
+    rseqc_dir = project_dir / "RSeQC"
+    rseqc_dir.mkdir(parents=True, exist_ok=True)
+
+    bam_path = project_dir / "STAR" / f"{sample_name}_Aligned.sortedByCoord.out.bam"
+    output_path = rseqc_dir / f"{sample_name}_bam_stats_out.txt"
+
+    cmd = [
+        "bam_stat.py",
+        "-i",
+        str(bam_path),
+    ]
+
+    logger.info(f"Running bam_stat.py on {bam_path}")
+    try:
+        with open(output_path, "w") as out_fh, open("/dev/null", "w") as err_fh:
+            subprocess.run(
+                cmd,
+                stdout=out_fh,
+                stderr=err_fh,
+                check=True,
+                text=True,
+            )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"bam_stat.py failed for {bam_path}: {e}")
+
+    logger.info(f"bam_stat.py complete, output: {output_path}")
+    return output_path
+
+
+def run_read_distribution(sample_name, project_dir, genome_bed):
+    """
+    Run read_distribution.py to summarize read distribution over genomic features.
+
+    Matches the original bash command:
+        read_distribution.py -i ${PROJECT_DIR}/STAR/${samplename}_Aligned.sortedByCoord.out.bam \
+            -r ${GENOME_BED} \
+            > ${PROJECT_DIR}/RSeQC/${samplename}_read_distribution.txt \
+            2> /dev/null
+
+    Parameters
+    ----------
+    sample_name : str
+        Sample name used in STAR and RSeQC output files.
+    project_dir : str or Path
+        Project directory containing STAR outputs and RSeQC output folder.
+    genome_bed : str or Path
+        Path to the genome BED file used by read_distribution.py.
+
+    Returns
+    -------
+    Path
+        Path to the read_distribution output text file.
+
+    Raises
+    ------
+    RuntimeError
+        If read_distribution.py fails.
+    """
+    project_dir = Path(project_dir)
+    rseqc_dir = project_dir / "RSeQC"
+    rseqc_dir.mkdir(parents=True, exist_ok=True)
+
+    bam_path = project_dir / "STAR" / f"{sample_name}_Aligned.sortedByCoord.out.bam"
+    output_path = rseqc_dir / f"{sample_name}_read_distribution.txt"
+
+    cmd = [
+        "read_distribution.py",
+        "-i",
+        str(bam_path),
+        "-r",
+        str(genome_bed),
+    ]
+
+    logger.info(f"Running read_distribution.py on {bam_path}")
+    try:
+        with open(output_path, "w") as out_fh, open("/dev/null", "w") as err_fh:
+            subprocess.run(
+                cmd,
+                stdout=out_fh,
+                stderr=err_fh,
+                check=True,
+                text=True,
+            )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"read_distribution.py failed for {bam_path}: {e}")
+
+    logger.info(f"read_distribution.py complete, output: {output_path}")
+    return output_path
+
+
 def main(config_path, sample_index):
     """Run stage 1 for a single sample."""
     raise NotImplementedError("stage1 logic not implemented yet")
