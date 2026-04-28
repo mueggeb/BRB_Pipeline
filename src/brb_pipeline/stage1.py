@@ -471,6 +471,64 @@ def run_featurecounts(star_output_prefix, sample_name, project_dir, genome_gtf, 
     return rmatrix_path
 
 
+def run_fastqc_post_alignment(sample_name, project_dir, cpus_per_task):
+    """
+    Run FastQC on the STAR-aligned BAM file for post-alignment QC.
+
+    Matches the original bash command:
+        fastqc -t ${SLURM_CPUS_PER_TASK} -o ${PROJECT_DIR}/fastqc/ \
+               ${PROJECT_DIR}/STAR/${samplename}_Aligned.sortedByCoord.out.bam \
+               2> ${PROJECT_DIR}/fastqc/${samplename}_Aligned.sortedByCoord.out.bam.sterr.txt
+
+    Parameters
+    ----------
+    sample_name : str
+        Sample name used for output and stderr log naming.
+    project_dir : str or Path
+        Project directory where FastQC output is written.
+    cpus_per_task : int
+        Number of CPU cores to pass to FastQC.
+
+    Returns
+    -------
+    Path
+        Path to the FastQC output directory.
+
+    Raises
+    ------
+    RuntimeError
+        If FastQC command fails.
+    """
+    project_dir = Path(project_dir)
+    fastqc_dir = project_dir / "fastqc"
+    fastqc_dir.mkdir(parents=True, exist_ok=True)
+
+    bam_path = project_dir / "STAR" / f"{sample_name}_Aligned.sortedByCoord.out.bam"
+    stderr_path = fastqc_dir / f"{sample_name}_Aligned.sortedByCoord.out.bam.sterr.txt"
+
+    cmd = [
+        "fastqc",
+        "-t", str(cpus_per_task),
+        "-o", str(fastqc_dir),
+        str(bam_path),
+    ]
+
+    logger.info(f"Running post-alignment FastQC on {bam_path}")
+    try:
+        with open(stderr_path, "w") as stderr_fh:
+            subprocess.run(
+                cmd,
+                stderr=stderr_fh,
+                check=True,
+                text=True,
+            )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"Post-alignment FastQC failed for {bam_path}: {e}")
+
+    logger.info(f"Post-alignment FastQC complete, output directory: {fastqc_dir}")
+    return fastqc_dir
+
+
 def main(config_path, sample_index):
     """Run stage 1 for a single sample."""
     raise NotImplementedError("stage1 logic not implemented yet")
