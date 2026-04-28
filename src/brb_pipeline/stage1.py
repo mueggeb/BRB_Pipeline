@@ -399,6 +399,78 @@ def run_star_alignment(trimmed_read2_path, sample_name, project_dir, star_dir, c
     logger.info(f"STAR alignment complete, output prefix: {output_prefix}")
     return output_prefix
 
+
+def run_featurecounts(star_output_prefix, sample_name, project_dir, genome_gtf, cpus_per_task):
+    """
+    Run featureCounts on the STAR-aligned BAM file.
+
+    Matches the original bash command:
+        featureCounts \
+           -a $GENOME_GTF \
+           -o ${PROJECT_DIR}/FeatureCounts/${samplename}_featureCounts.txt \
+           -T ${SLURM_CPUS_PER_TASK} \
+           -R BAM \
+           ${PROJECT_DIR}/STAR/${samplename}_Aligned.sortedByCoord.out.bam \
+           2> ${PROJECT_DIR}/FeatureCounts/${samplename}_featurecounts.screen-output.log
+
+    Parameters
+    ----------
+    star_output_prefix : str or Path
+        STAR output prefix path returned by run_star_alignment.
+    sample_name : str
+        Sample name used for output and log file naming.
+    project_dir : str or Path
+        Project directory where featureCounts output is written.
+    genome_gtf : str or Path
+        Path to the GTF annotation file.
+    cpus_per_task : int
+        Number of CPU cores to pass to featureCounts.
+
+    Returns
+    -------
+    Path
+        Path to the featureCounts RMatrix output file.
+
+    Raises
+    ------
+    RuntimeError
+        If the featureCounts command fails.
+    """
+    project_dir = Path(project_dir)
+    featurecounts_dir = project_dir / "FeatureCounts"
+    featurecounts_dir.mkdir(parents=True, exist_ok=True)
+
+    star_output_prefix = Path(star_output_prefix)
+    bam_path = project_dir / "STAR" / f"{sample_name}_Aligned.sortedByCoord.out.bam"
+    featurecounts_txt = featurecounts_dir / f"{sample_name}_featureCounts.txt"
+    screen_output_log = featurecounts_dir / f"{sample_name}_featurecounts.screen-output.log"
+    rmatrix_path = featurecounts_dir / f"{sample_name}_featureCounts.RMatrix.txt"
+
+    cmd = [
+        "featureCounts",
+        "-a", str(genome_gtf),
+        "-o", str(featurecounts_txt),
+        "-T", str(cpus_per_task),
+        "-R", "BAM",
+        str(bam_path),
+    ]
+
+    logger.info(f"Running featureCounts on {bam_path}")
+    try:
+        with open(screen_output_log, "w") as stderr_fh:
+            subprocess.run(
+                cmd,
+                stderr=stderr_fh,
+                check=True,
+                text=True,
+            )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"featureCounts failed for {bam_path}: {e}")
+
+    logger.info(f"featureCounts complete, output: {featurecounts_txt}")
+    return rmatrix_path
+
+
 def main(config_path, sample_index):
     """Run stage 1 for a single sample."""
     raise NotImplementedError("stage1 logic not implemented yet")
