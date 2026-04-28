@@ -331,6 +331,73 @@ def trim_polyA(read2_path, sample_name, project_dir, cpus_per_task):
     logger.info(f"PolyA trimming complete, output: {output_trimmed}")
     return output_trimmed
 
+def run_star_alignment(trimmed_read2_path, sample_name, project_dir, star_dir, cpus_per_task):
+    """
+    Align reads with STAR using the adapter- and polyA-trimmed Read 2 FASTQ.
+
+    Matches the original bash command:
+        STAR \
+            --runThreadN ${SLURM_CPUS_PER_TASK} \
+            --genomeDir $STAR_DIR \
+            --readFilesCommand zcat \
+            --readFilesIn ${PROJECT_DIR}/cutadapt/${samplename}_trimmed.fq.gz \
+            --outSAMtype BAM SortedByCoordinate \
+            --outFilterMultimapNmax 1 \
+            --outFileNamePrefix ${PROJECT_DIR}/STAR/${samplename}_
+
+    Parameters
+    ----------
+    trimmed_read2_path : str or Path
+        Path to the polyA-trimmed Read 2 FASTQ file.
+    sample_name : str
+        Sample name used for naming STAR output prefix.
+    project_dir : str or Path
+        Project directory where STAR output is written.
+    star_dir : str or Path
+        STAR genome directory.
+    cpus_per_task : int
+        Number of CPU cores to pass to STAR.
+
+    Returns
+    -------
+    Path
+        The STAR output prefix directory path.
+
+    Raises
+    ------
+    RuntimeError
+        If the STAR command fails.
+    """
+    project_dir = Path(project_dir)
+    star_out_dir = project_dir / "STAR"
+    star_out_dir.mkdir(parents=True, exist_ok=True)
+
+    trimmed_read2_path = Path(trimmed_read2_path)
+    output_prefix = star_out_dir / f"{sample_name}_"
+
+    cmd = [
+        "STAR",
+        "--runThreadN", str(cpus_per_task),
+        "--genomeDir", str(star_dir),
+        "--readFilesCommand", "zcat",
+        "--readFilesIn", str(trimmed_read2_path),
+        "--outSAMtype", "BAM", "SortedByCoordinate",
+        "--outFilterMultimapNmax", "1",
+        "--outFileNamePrefix", str(output_prefix),
+    ]
+
+    logger.info(f"Running STAR alignment on {trimmed_read2_path}")
+    try:
+        subprocess.run(
+            cmd,
+            check=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(f"STAR alignment failed for {trimmed_read2_path}: {e}")
+
+    logger.info(f"STAR alignment complete, output prefix: {output_prefix}")
+    return output_prefix
 
 def main(config_path, sample_index):
     """Run stage 1 for a single sample."""
