@@ -85,4 +85,10 @@ rather than requiring manual path entry.
 - Metric extraction: do NOT manually extract cutadapt/STAR metrics in Python
   Use MultiQC --data-format tsv for aggregated metrics instead
 - Per-sample log file: keep for pipeline parameters/provenance only
-  (STAR index, GTF, flags used — not read counts)
+(STAR index, GTF, flags used — not read counts)
+
+## Environment
+- Shared mamba environments: /ref/bmlab/software/envs/
+- Pipeline environment: /ref/bmlab/software/envs/brb_pipeline
+- Create once, activated per run in SLURM wrapper scripts
+- Never install per-run; never delete after run
