@@ -16,7 +16,7 @@ Two-stage design — preserve this structure during refactoring:
   - FastQC on trimmed reads
   - STAR alignment
   - featureCounts → per-sample count matrix
-  - RSeQC + Qualimap QC
+  - RSeQC
   - Optional cleanup of intermediates
 
 **Stage 2 (aggregation, runs after all samples complete):** scripts/BRB_MultiQC_FullRun_240116.sh
@@ -77,3 +77,12 @@ rather than requiring manual path entry.
 - Break the two-stage structure
 - Remove existing log metrics (needed for QC comparisons across runs)
 - Introduce tools not available on HTCF without explaining why first
+
+## Design Decisions (supersede original bash scripts)
+- Qualimap: removed from pipeline entirely
+- RSeQC: keep bam_stat.py and read_distribution.py only
+  (dropped: junction_saturation, read_duplication)
+- Metric extraction: do NOT manually extract cutadapt/STAR metrics in Python
+  Use MultiQC --data-format tsv for aggregated metrics instead
+- Per-sample log file: keep for pipeline parameters/provenance only
+  (STAR index, GTF, flags used — not read counts)
