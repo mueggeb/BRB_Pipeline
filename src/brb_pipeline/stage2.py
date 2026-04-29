@@ -1,6 +1,8 @@
 """Stage 2: aggregate BRB-seq results and run MultiQC."""
 
 import logging
+import subprocess
+import shutil
 import pandas as pd
 from pathlib import Path
 
@@ -96,6 +98,42 @@ def run_multiqc(project_dir, library_name, config_template_path=None):
     report_path = multiqc_dir / f"{library_name}_QCReport.html"
     logger.info(f"MultiQC generated report at {report_path}")
     return report_path
+
+
+def cleanup_stage2(project_dir, remove_intermediate):
+    """
+    Remove per-sample intermediate outputs produced in stage 1.
+
+    This runs only when the remove_intermediate flag is True in the config.
+    Files removed match the original bash cleanup behavior.
+    """
+    if not remove_intermediate:
+        logger.info("Skipping stage 2 cleanup because remove_intermediate is False")
+        return
+
+    project_dir = Path(project_dir)
+    cleanup_patterns = [
+        "RSeQC/*",
+        "fastqc/*",
+        "cutadapt/*.fq.gz",
+        "Demultiplexed_Fastq/*",
+        "STAR/*Log.out",
+        "STAR/*bam.bai",
+        "FeatureCounts/*RMatrix.txt",
+        "FeatureCounts/*screen-output.log",
+    ]
+
+    for pattern in cleanup_patterns:
+        for path in project_dir.glob(pattern):
+            try:
+                if path.is_dir():
+                    shutil.rmtree(path)
+                    logger.info(f"Removed directory: {path}")
+                else:
+                    path.unlink()
+                    logger.info(f"Removed file: {path}")
+            except OSError as exc:
+                logger.warning(f"Could not remove {path}: {exc}")
 
 
 def main(config_path):
