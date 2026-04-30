@@ -722,7 +722,62 @@ def main(config_path, sample_index, dry_run=False):
     """Run stage 1 for a single sample."""
     global _dry_run
     _dry_run = dry_run
-    raise NotImplementedError("stage1 logic not implemented yet")
+
+    from .config import load_config
+
+    logger.info(f"Loading config from {config_path}")
+    config = load_config(config_path)
+
+    if sample_index < 1 or sample_index > len(config.samples):
+        raise IndexError(
+            f"Sample index {sample_index} is out of range for {len(config.samples)} samples"
+        )
+
+    sample = config.samples[sample_index - 1]
+    project_dir = config.output_dir
+    cpus = config.cpus_per_task
+
+    logger.info(
+        f"Starting Stage 1 for sample {sample.sample_name} "
+        f"(index {sample_index}/{len(config.samples)})"
+    )
+
+    if config.demultiplex:
+        read2_input = demultiplex_by_barcode(
+            sample.rt_barcode,
+            sample.sample_name,
+            config.read1,
+            config.read2,
+            project_dir,
+            cpus,
+        )
+    else:
+        read2_input = config.read2
+
+    # FastQC on raw reads (demultiplexed if demultiplexing is enabled)
+    run_fastqc(read2_input, sample.sample_name, project_dir, cpus)
+
+    trimmed_adapter = trim_adapters(read2_input, sample.sample_name, project_dir, cpus)
+    trimmed_polyA = trim_polyA(trimmed_adapter, sample.sample_name, project_dir, cpus)
+
+    # FastQC on trimmed reads
+    run_fastqc(trimmed_polyA, sample.sample_name, project_dir, cpus)
+
+    star_prefix = run_star_alignment(
+        trimmed_polyA,
+        sample.sample_name,
+        project_dir,
+        config.star_index,
+        cpus,
+    )
+
+    run_featurecounts(star_prefix, sample.sample_name, project_dir, config.gtf, cpus)
+    run_bam_stat(sample.sample_name, project_dir)
+    run_read_distribution(sample.sample_name, project_dir, config.bed)
+    cleanup_intermediates(sample.sample_name, project_dir, config.remove_intermediate)
+
+    logger.info(f"Stage 1 complete for sample {sample.sample_name}")
+    return True
 
 
 if __name__ == "__main__":
