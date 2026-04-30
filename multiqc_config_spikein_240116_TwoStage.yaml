@@ -9,8 +9,7 @@ run_modules:
    - custom_content
    - star
    - featureCounts
-   - fastqc
-   - rseqc
+   - fastqc 
 
 # Fix for running two fastqc one with read2. Not sure 
 extra_fn_clean_trim:
@@ -18,7 +17,7 @@ extra_fn_clean_trim:
                         
 # Pass fail checks on general statistics table
 table_cond_formatting_rules:
-  mqc-generalstats-fastqc_trimmed-percent_gc:
+    mqc-generalstats-fastqc_trimmed-percent_gc:
         pass:
             - gt: 35
             - lt: 70

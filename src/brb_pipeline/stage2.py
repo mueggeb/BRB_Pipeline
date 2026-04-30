@@ -144,7 +144,11 @@ def run_multiqc(project_dir, library_name, config_template_path=None):
     if config_template_path:
         template_path = Path(config_template_path)
         if template_path.exists():
-            cmd.extend(["--config", str(template_path)])
+            template_text = template_path.read_text()
+            rendered_template = template_text.replace("${LIBRARY_NAME}", library_name)
+            rendered_config_path = multiqc_dir / "multiqc_config_rendered.yaml"
+            _write_file(rendered_config_path, rendered_template)
+            cmd.extend(["--config", str(rendered_config_path)])
 
     log_file = multiqc_dir / "multiqc.log"
     logger.info(f"Running MultiQC with outputs in {multiqc_dir}")
