@@ -159,9 +159,10 @@ def demultiplex_by_barcode(barcode, sample_name, index1_paths, index2_paths,
         )
 
     # Clean up intermediate demultiplexed files
-    for intermediate in cutadapt_outputs:
-        intermediate.unlink()
-        logger.info(f"Removed intermediate: {intermediate}")
+    if not _dry_run:
+        for intermediate in cutadapt_outputs:
+            intermediate.unlink()
+            logger.info(f"Removed intermediate: {intermediate}")
 
     # Compute MD5 checksum
     md5_file = str(final_output) + ".md5sum"
@@ -700,6 +701,9 @@ def cleanup_intermediates(sample_name, project_dir, remove_intermediate):
     ]
 
     for path in paths_to_remove:
+        if _dry_run:
+            logger.info(f"[DRY RUN] rm {path}")
+            continue
         if path.exists():
             try:
                 path.unlink()
