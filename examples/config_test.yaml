@@ -14,7 +14,7 @@ processing:
   demultiplex: true
   remove_intermediate: true
 
-mapping_file: /scratch/bmlab/mueggeb/projects/BRB_Python_Scratch/test_mapping_JL005.tsv
+mapping_file: /scratch/bmlab/mueggeb/projects/BRB_Python_Scratch/examples/test_mapping_JL005.tsv
 
 reads:
   read1: /lts/bmlab/bmlab_1/mueggeb/projects/JL005_Liu/data/SR010407/LIB133722-DIL01_23FMG2LT3_S1_L005_R1_001.fastq.gz
