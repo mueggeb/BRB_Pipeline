@@ -258,7 +258,7 @@ def main(config_path, dry_run=False):
     global _dry_run
     _dry_run = dry_run
 
-    from .config import load_config
+    from brb_pipeline.config import load_config
 
     logger.info(f"Loading config from {config_path}")
     config = load_config(config_path)
@@ -275,6 +275,10 @@ def main(config_path, dry_run=False):
 
 
 if __name__ == "__main__":
+    # Add src directory to Python path for absolute imports
+    src_dir = Path(__file__).parent.parent
+    sys.path.insert(0, str(src_dir))
+
     parser = argparse.ArgumentParser(
         description="Stage 2: aggregate BRB-seq results and run MultiQC."
     )
