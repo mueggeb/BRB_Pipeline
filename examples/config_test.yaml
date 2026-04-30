@@ -2,27 +2,27 @@
 
 project:
   name: example_run
-  output_dir: /path/to/project_dir
+  output_dir: /scratch/bmlab/mueggeb/projects/BRB_Python_Scratch
 
 reference:
   species: mouse
-  star_index: /path/to/STAR/index
-  gtf: /path/to/genes.gtf
-  bed: /path/to/genes.bed
+  star_index: /ref/rmlab/data/references/Mus_musculus/Ensembl/GRCm38/Sequence/STAR_2.7.6a
+  gtf: /ref/rmlab/data/references/Mus_musculus/Ensembl/GRCm38/Annotation/Genes/genes.gtf
+  bed: /ref/rmlab/data/references/Mus_musculus/Ensembl/GRCm38/Annotation/Genes/genes.bed
 
 processing:
   demultiplex: true
   remove_intermediate: true
 
-mapping_file: /path/to/mapping_file.tsv
+mapping_file: /scratch/bmlab/mueggeb/projects/BRB_Python_Scratch/test_mapping_JL005.tsv
 
 reads:
-  read1: /path/to/shared_read1.fastq.gz
-  read2: /path/to/shared_read2.fastq.gz
+  read1: /lts/bmlab/bmlab_1/mueggeb/projects/JL005_Liu/data/SR010407/LIB133722-DIL01_23FMG2LT3_S1_L005_R1_001.fastq.gz
+  read2: /lts/bmlab/bmlab_1/mueggeb/projects/JL005_Liu/data/SR010407/LIB133722-DIL01_23FMG2LT3_S1_L005_R2_001.fastq.gz
 
 multiqc:
   library_name: example_library
-  config_template: /path/to/multiqc_template.yaml
+  config_template: /ref/bmlab/software/brb_python_2026/BRB_Pipeline/examples/example_multiqc_template.yaml
 
 slurm:
   cpus_per_task: 4
