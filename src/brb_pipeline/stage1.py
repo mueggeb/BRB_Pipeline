@@ -775,6 +775,9 @@ def main(config_path, sample_index, dry_run=False):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, stream=sys.stderr,
+                        format="%(levelname)s %(name)s: %(message)s")
+
     # Add src directory to Python path for absolute imports
     src_dir = Path(__file__).parent.parent
     sys.path.insert(0, str(src_dir))
