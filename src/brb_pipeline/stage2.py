@@ -153,15 +153,16 @@ def run_multiqc(project_dir, library_name, config_template_path=None):
     log_file = multiqc_dir / "multiqc.log"
     logger.info(f"Running MultiQC with outputs in {multiqc_dir}")
 
-    global _dry_run
-    if _dry_run:
-        logger.info(f"[DRY RUN] {' '.join(cmd)}")
-    else:
-        try:
-            with open(log_file, "w") as log_fh:
-                subprocess.run(cmd, stderr=log_fh, stdout=log_fh, check=True, text=True)
-        except subprocess.CalledProcessError as exc:
-            raise RuntimeError(f"MultiQC failed: {exc}")
+    try:
+        _run_command(
+            cmd,
+            stderr=log_file,
+            stdout=log_file,
+            check=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"MultiQC failed: {exc}")
 
     report_path = multiqc_dir / f"{library_name}_QCReport.html"
     logger.info(f"MultiQC generated report at {report_path}")

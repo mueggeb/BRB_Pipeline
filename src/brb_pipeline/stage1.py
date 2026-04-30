@@ -87,8 +87,8 @@ def demultiplex_by_barcode(barcode, sample_name, index1_paths, index2_paths,
     cutadapt_dir = project_dir / "cutadapt"
     demultiplexed_dir = project_dir / "Demultiplexed_Fastq"
     
-    cutadapt_dir.mkdir(parents=True, exist_ok=True)
-    demultiplexed_dir.mkdir(parents=True, exist_ok=True)
+    _makedirs(cutadapt_dir)
+    _makedirs(demultiplexed_dir)
 
     # Parse comma-separated file lists into arrays
     index1_list = [f.strip() for f in index1_paths.split(",")]
@@ -133,14 +133,13 @@ def demultiplex_by_barcode(barcode, sample_name, index1_paths, index2_paths,
         ]
 
         try:
-            with open(log_file, "w") as log_fh:
-                result = subprocess.run(
-                    cmd,
-                    stdout=log_fh,
-                    stderr=subprocess.STDOUT,
-                    check=True,
-                    text=True,
-                )
+            _run_command(
+                cmd,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                check=True,
+                text=True,
+            )
             logger.info(f"Cutadapt completed for {index2_path}, log: {log_file}")
             cutadapt_outputs.append(output_r2)
         except subprocess.CalledProcessError as e:
@@ -153,11 +152,10 @@ def demultiplex_by_barcode(barcode, sample_name, index1_paths, index2_paths,
     logger.info(f"Concatenating demultiplexed files into {final_output}")
 
     concat_cmd = ["cat"] + [str(f) for f in cutadapt_outputs]
-    with open(final_output, "wb") as out_fh:
-        subprocess.run(
-            concat_cmd,
-            stdout=out_fh,
-            check=True,
+    _run_command(
+        concat_cmd,
+        stdout=final_output,
+        check=True,
         )
 
     # Clean up intermediate demultiplexed files
@@ -168,8 +166,7 @@ def demultiplex_by_barcode(barcode, sample_name, index1_paths, index2_paths,
     # Compute MD5 checksum
     md5_file = str(final_output) + ".md5sum"
     md5_cmd = ["md5sum", str(final_output)]
-    with open(md5_file, "w") as md5_fh:
-        subprocess.run(md5_cmd, stdout=md5_fh, check=True)
+    _run_command(md5_cmd, stdout=md5_file, check=True)
 
     logger.info(f"Demultiplexing complete. Output: {final_output}")
     return final_output
@@ -205,7 +202,7 @@ def run_fastqc(read2_path, sample_name, project_dir, cpus_per_task):
     """
     project_dir = Path(project_dir)
     fastqc_dir = project_dir / "fastqc"
-    fastqc_dir.mkdir(parents=True, exist_ok=True)
+    _makedirs(fastqc_dir)
 
     read2_path = Path(read2_path)
     stderr_path = fastqc_dir / f"{sample_name}_fastq.sterr.txt"
@@ -220,13 +217,12 @@ def run_fastqc(read2_path, sample_name, project_dir, cpus_per_task):
     logger.info(f"Running FastQC on {read2_path} with {cpus_per_task} threads")
 
     try:
-        with open(stderr_path, "w") as stderr_fh:
-            subprocess.run(
-                cmd,
-                stderr=stderr_fh,
-                check=True,
-                text=True,
-            )
+        _run_command(
+            cmd,
+            stderr=stderr_path,
+            check=True,
+            text=True,
+        )
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"FastQC failed for {read2_path}: {e}")
 
@@ -270,7 +266,7 @@ def trim_adapters(read2_path, sample_name, project_dir, cpus_per_task):
     """
     project_dir = Path(project_dir)
     cutadapt_dir = project_dir / "cutadapt"
-    cutadapt_dir.mkdir(parents=True, exist_ok=True)
+    _makedirs(cutadapt_dir)
 
     read2_path = Path(read2_path)
     output_trimmed = cutadapt_dir / f"{sample_name}_temp_trimmed.fq.gz"
@@ -287,14 +283,13 @@ def trim_adapters(read2_path, sample_name, project_dir, cpus_per_task):
 
     logger.info(f"Running adapter trimming on {read2_path}")
     try:
-        with open(log_file, "w") as log_fh:
-            subprocess.run(
-                cmd,
-                stdout=log_fh,
-                stderr=subprocess.STDOUT,
-                check=True,
-                text=True,
-            )
+        _run_command(
+            cmd,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            check=True,
+            text=True,
+        )
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Adapter trimming failed for {read2_path}: {e}")
 
@@ -339,7 +334,7 @@ def trim_polyA(read2_path, sample_name, project_dir, cpus_per_task):
     """
     project_dir = Path(project_dir)
     cutadapt_dir = project_dir / "cutadapt"
-    cutadapt_dir.mkdir(parents=True, exist_ok=True)
+    _makedirs(cutadapt_dir)
 
     read2_path = Path(read2_path)
     output_trimmed = cutadapt_dir / f"{sample_name}_trimmed.fq.gz"
@@ -357,14 +352,13 @@ def trim_polyA(read2_path, sample_name, project_dir, cpus_per_task):
 
     logger.info(f"Running polyA trimming on {read2_path}")
     try:
-        with open(log_file, "w") as log_fh:
-            subprocess.run(
-                cmd,
-                stdout=log_fh,
-                stderr=subprocess.STDOUT,
-                check=True,
-                text=True,
-            )
+        _run_command(
+            cmd,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            check=True,
+            text=True,
+        )
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"PolyA trimming failed for {read2_path}: {e}")
 
@@ -410,7 +404,7 @@ def run_star_alignment(trimmed_read2_path, sample_name, project_dir, star_dir, c
     """
     project_dir = Path(project_dir)
     star_out_dir = project_dir / "STAR"
-    star_out_dir.mkdir(parents=True, exist_ok=True)
+    _makedirs(star_out_dir)
 
     trimmed_read2_path = Path(trimmed_read2_path)
     output_prefix = star_out_dir / f"{sample_name}_"
@@ -428,7 +422,7 @@ def run_star_alignment(trimmed_read2_path, sample_name, project_dir, star_dir, c
 
     logger.info(f"Running STAR alignment on {trimmed_read2_path}")
     try:
-        subprocess.run(
+        _run_command(
             cmd,
             check=True,
             text=True,
@@ -478,7 +472,7 @@ def run_featurecounts(star_output_prefix, sample_name, project_dir, genome_gtf, 
     """
     project_dir = Path(project_dir)
     featurecounts_dir = project_dir / "FeatureCounts"
-    featurecounts_dir.mkdir(parents=True, exist_ok=True)
+    _makedirs(featurecounts_dir)
 
     star_output_prefix = Path(star_output_prefix)
     bam_path = project_dir / "STAR" / f"{sample_name}_Aligned.sortedByCoord.out.bam"
@@ -497,13 +491,12 @@ def run_featurecounts(star_output_prefix, sample_name, project_dir, genome_gtf, 
 
     logger.info(f"Running featureCounts on {bam_path}")
     try:
-        with open(screen_output_log, "w") as stderr_fh:
-            subprocess.run(
-                cmd,
-                stderr=stderr_fh,
-                check=True,
-                text=True,
-            )
+        _run_command(
+            cmd,
+            stderr=screen_output_log,
+            check=True,
+            text=True,
+        )
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"featureCounts failed for {bam_path}: {e}")
 
@@ -541,7 +534,7 @@ def run_fastqc_post_alignment(sample_name, project_dir, cpus_per_task):
     """
     project_dir = Path(project_dir)
     fastqc_dir = project_dir / "fastqc"
-    fastqc_dir.mkdir(parents=True, exist_ok=True)
+    _makedirs(fastqc_dir)
 
     bam_path = project_dir / "STAR" / f"{sample_name}_Aligned.sortedByCoord.out.bam"
     stderr_path = fastqc_dir / f"{sample_name}_Aligned.sortedByCoord.out.bam.sterr.txt"
@@ -555,13 +548,12 @@ def run_fastqc_post_alignment(sample_name, project_dir, cpus_per_task):
 
     logger.info(f"Running post-alignment FastQC on {bam_path}")
     try:
-        with open(stderr_path, "w") as stderr_fh:
-            subprocess.run(
-                cmd,
-                stderr=stderr_fh,
-                check=True,
-                text=True,
-            )
+        _run_command(
+            cmd,
+            stderr=stderr_path,
+            check=True,
+            text=True,
+        )
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"Post-alignment FastQC failed for {bam_path}: {e}")
 
@@ -597,7 +589,7 @@ def run_bam_stat(sample_name, project_dir):
     """
     project_dir = Path(project_dir)
     rseqc_dir = project_dir / "RSeQC"
-    rseqc_dir.mkdir(parents=True, exist_ok=True)
+    _makedirs(rseqc_dir)
 
     bam_path = project_dir / "STAR" / f"{sample_name}_Aligned.sortedByCoord.out.bam"
     output_path = rseqc_dir / f"{sample_name}_bam_stats_out.txt"
@@ -610,14 +602,13 @@ def run_bam_stat(sample_name, project_dir):
 
     logger.info(f"Running bam_stat.py on {bam_path}")
     try:
-        with open(output_path, "w") as out_fh, open("/dev/null", "w") as err_fh:
-            subprocess.run(
-                cmd,
-                stdout=out_fh,
-                stderr=err_fh,
-                check=True,
-                text=True,
-            )
+        _run_command(
+            cmd,
+            stdout=output_path,
+            stderr="/dev/null",
+            check=True,
+            text=True,
+        )
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"bam_stat.py failed for {bam_path}: {e}")
 
@@ -656,7 +647,7 @@ def run_read_distribution(sample_name, project_dir, genome_bed):
     """
     project_dir = Path(project_dir)
     rseqc_dir = project_dir / "RSeQC"
-    rseqc_dir.mkdir(parents=True, exist_ok=True)
+    _makedirs(rseqc_dir)
 
     bam_path = project_dir / "STAR" / f"{sample_name}_Aligned.sortedByCoord.out.bam"
     output_path = rseqc_dir / f"{sample_name}_read_distribution.txt"
@@ -671,14 +662,13 @@ def run_read_distribution(sample_name, project_dir, genome_bed):
 
     logger.info(f"Running read_distribution.py on {bam_path}")
     try:
-        with open(output_path, "w") as out_fh, open("/dev/null", "w") as err_fh:
-            subprocess.run(
-                cmd,
-                stdout=out_fh,
-                stderr=err_fh,
-                check=True,
-                text=True,
-            )
+        _run_command(
+            cmd,
+            stdout=output_path,
+            stderr="/dev/null",
+            check=True,
+            text=True,
+        )
     except subprocess.CalledProcessError as e:
         raise RuntimeError(f"read_distribution.py failed for {bam_path}: {e}")
 
