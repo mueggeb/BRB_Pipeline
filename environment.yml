@@ -7,11 +7,11 @@ channels:
   - defaults
 dependencies:
   - python=3.10
-  - cutadapt=2.10
-  - fastqc=0.12.1
-  - star=2.7.6a
-  - subread=2.0.2
-  - rseqc=2.6.4
-  - samtools=1.7
-  - multiqc=1.13
+  - cutadapt
+  - fastqc
+  - star
+  - subread
+  - rseqc
+  - samtools
+  - multiqc
   - pandas
