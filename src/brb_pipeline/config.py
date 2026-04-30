@@ -198,8 +198,13 @@ def load_config(config_path):
     mapping_file = yaml_dict["mapping_file"]
     mapping_path = Path(mapping_file)
 
-    # If mapping file is relative, resolve it relative to the current working directory
+    # If mapping file is relative, resolve it relative to the current working directory first.
+    # If that path does not exist, fall back to resolving relative to the config file location.
     if not mapping_path.is_absolute():
-        mapping_path = Path.cwd() / mapping_path
+        cwd_path = Path.cwd() / mapping_path
+        if cwd_path.exists():
+            mapping_path = cwd_path
+        else:
+            mapping_path = config_path.parent / mapping_path
 
     return Config(yaml_dict, mapping_path)
