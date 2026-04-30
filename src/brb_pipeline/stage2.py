@@ -253,7 +253,21 @@ def main(config_path, dry_run=False):
     """Run stage 2 aggregation and reporting."""
     global _dry_run
     _dry_run = dry_run
-    raise NotImplementedError("stage2 logic not implemented yet")
+
+    from .config import load_config
+
+    logger.info(f"Loading config from {config_path}")
+    config = load_config(config_path)
+    project_dir = config.output_dir
+    library_name = config.library_name
+
+    logger.info(f"Starting Stage 2 for project {config.project_name}")
+    validate_stage1_outputs(project_dir)
+    merge_featurecounts(project_dir, library_name)
+    run_multiqc(project_dir, library_name, config.multiqc_template)
+    cleanup_stage2(project_dir, config.remove_intermediate)
+
+    logger.info("Stage 2 completed successfully")
 
 
 if __name__ == "__main__":
