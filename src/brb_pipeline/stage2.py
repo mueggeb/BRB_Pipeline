@@ -136,6 +136,55 @@ def cleanup_stage2(project_dir, remove_intermediate):
                 logger.warning(f"Could not remove {path}: {exc}")
 
 
+def validate_stage1_outputs(project_dir):
+    """
+    Preflight validation: check for expected Stage 1 output files.
+
+    Ensures that Stage 1 completed successfully by checking for the presence
+    of key output files. Raises a clear error if any are missing.
+
+    Parameters
+    ----------
+    project_dir : Path or str
+        Project directory to validate.
+
+    Raises
+    ------
+    RuntimeError
+        If expected Stage 1 outputs are missing.
+    """
+    project_dir = Path(project_dir)
+
+    # Check for at least one RMatrix file
+    rmatrix_files = list(project_dir.glob("FeatureCounts/*_featureCounts.RMatrix.txt"))
+    if not rmatrix_files:
+        raise RuntimeError(
+            f"No RMatrix files found in {project_dir}/FeatureCounts/. "
+            "Check that Stage 1 completed successfully."
+        )
+
+    # Check for at least one STAR Log.final.out
+    star_logs = list(project_dir.glob("STAR/*Log.final.out"))
+    if not star_logs:
+        raise RuntimeError(
+            f"No STAR alignment logs found in {project_dir}/STAR/. "
+            "Check that Stage 1 completed successfully."
+        )
+
+    # Check for at least one cutadapt log
+    cutadapt_logs = list(project_dir.glob("cutadapt/*.log"))
+    if not cutadapt_logs:
+        raise RuntimeError(
+            f"No cutadapt logs found in {project_dir}/cutadapt/. "
+            "Check that Stage 1 completed successfully."
+        )
+
+    logger.info(
+        f"Stage 1 preflight validation passed: {len(rmatrix_files)} samples, "
+        f"{len(star_logs)} STAR logs, {len(cutadapt_logs)} cutadapt logs found."
+    )
+
+
 def main(config_path):
     """Run stage 2 aggregation and reporting."""
     raise NotImplementedError("stage2 logic not implemented yet")
