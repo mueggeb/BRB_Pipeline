@@ -3,10 +3,50 @@
 import logging
 import subprocess
 import tempfile
+import argparse
+import sys
 from pathlib import Path
 
 
 logger = logging.getLogger(__name__)
+
+# Module-level flag for dry-run mode
+_dry_run = False
+
+
+def _run_command(cmd, **kwargs):
+    """
+    Execute a command or print it in dry-run mode.
+
+    Parameters
+    ----------
+    cmd : list
+        Command as list of strings (for subprocess.run).
+    **kwargs
+        Additional arguments to pass to subprocess.run.
+    """
+    global _dry_run
+    if _dry_run:
+        logger.info(f"[DRY RUN] {' '.join(str(c) for c in cmd)}")
+        return
+    subprocess.run(cmd, **kwargs)
+
+
+def _makedirs(path):
+    """
+    Create directory or print in dry-run mode.
+
+    Parameters
+    ----------
+    path : Path or str
+        Directory path to create.
+    """
+    global _dry_run
+    path = Path(path)
+    if _dry_run:
+        logger.info(f"[DRY RUN] mkdir -p {path}")
+        return
+    path.mkdir(parents=True, exist_ok=True)
 
 
 def demultiplex_by_barcode(barcode, sample_name, index1_paths, index2_paths, 
@@ -678,6 +718,23 @@ def cleanup_intermediates(sample_name, project_dir, remove_intermediate):
                 logger.warning(f"Could not remove intermediate file {path}: {exc}")
 
 
-def main(config_path, sample_index):
+def main(config_path, sample_index, dry_run=False):
     """Run stage 1 for a single sample."""
+    global _dry_run
+    _dry_run = dry_run
     raise NotImplementedError("stage1 logic not implemented yet")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Stage 1: per-sample BRB-seq processing."
+    )
+    parser.add_argument("config", help="Path to YAML config file")
+    parser.add_argument("sample_index", type=int, help="Sample index (1-based from SLURM array)")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print commands and file operations without executing them",
+    )
+    args = parser.parse_args()
+    main(args.config, args.sample_index, dry_run=args.dry_run)

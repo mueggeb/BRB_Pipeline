@@ -3,11 +3,71 @@
 import logging
 import subprocess
 import shutil
+import argparse
+import sys
 import pandas as pd
 from pathlib import Path
 
 
 logger = logging.getLogger(__name__)
+
+# Module-level flag for dry-run mode
+_dry_run = False
+
+
+def _run_command(cmd, **kwargs):
+    """
+    Execute a command or print it in dry-run mode.
+
+    Parameters
+    ----------
+    cmd : list
+        Command as list of strings (for subprocess.run).
+    **kwargs
+        Additional arguments to pass to subprocess.run.
+    """
+    global _dry_run
+    if _dry_run:
+        logger.info(f"[DRY RUN] {' '.join(str(c) for c in cmd)}")
+        return
+    subprocess.run(cmd, **kwargs)
+
+
+def _makedirs(path):
+    """
+    Create directory or print in dry-run mode.
+
+    Parameters
+    ----------
+    path : Path or str
+        Directory path to create.
+    """
+    global _dry_run
+    path = Path(path)
+    if _dry_run:
+        logger.info(f"[DRY RUN] mkdir -p {path}")
+        return
+    path.mkdir(parents=True, exist_ok=True)
+
+
+def _write_file(path, content):
+    """
+    Write content to file or print in dry-run mode.
+
+    Parameters
+    ----------
+    path : Path or str
+        File path to write.
+    content : str
+        Content to write.
+    """
+    global _dry_run
+    path = Path(path)
+    if _dry_run:
+        logger.info(f"[DRY RUN] write {len(content)} bytes to {path}")
+        return
+    with open(path, "w") as fh:
+        fh.write(content)
 
 
 def merge_featurecounts(project_dir, library_name, sequencing_type="Full_Run"):
@@ -66,7 +126,7 @@ def run_multiqc(project_dir, library_name, config_template_path=None):
     """
     project_dir = Path(project_dir)
     multiqc_dir = project_dir / "MultiQC"
-    multiqc_dir.mkdir(parents=True, exist_ok=True)
+    _makedirs(multiqc_dir)
 
     cmd = [
         "multiqc",
@@ -89,11 +149,15 @@ def run_multiqc(project_dir, library_name, config_template_path=None):
     log_file = multiqc_dir / "multiqc.log"
     logger.info(f"Running MultiQC with outputs in {multiqc_dir}")
 
-    try:
-        with open(log_file, "w") as log_fh:
-            subprocess.run(cmd, stderr=log_fh, stdout=log_fh, check=True, text=True)
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(f"MultiQC failed: {exc}")
+    global _dry_run
+    if _dry_run:
+        logger.info(f"[DRY RUN] {' '.join(cmd)}")
+    else:
+        try:
+            with open(log_file, "w") as log_fh:
+                subprocess.run(cmd, stderr=log_fh, stdout=log_fh, check=True, text=True)
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"MultiQC failed: {exc}")
 
     report_path = multiqc_dir / f"{library_name}_QCReport.html"
     logger.info(f"MultiQC generated report at {report_path}")
@@ -185,6 +249,22 @@ def validate_stage1_outputs(project_dir):
     )
 
 
-def main(config_path):
+def main(config_path, dry_run=False):
     """Run stage 2 aggregation and reporting."""
+    global _dry_run
+    _dry_run = dry_run
     raise NotImplementedError("stage2 logic not implemented yet")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Stage 2: aggregate BRB-seq results and run MultiQC."
+    )
+    parser.add_argument("config", help="Path to YAML config file")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print commands and file operations without executing them",
+    )
+    args = parser.parse_args()
+    main(args.config, dry_run=args.dry_run)
