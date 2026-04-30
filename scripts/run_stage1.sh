@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
+#SBATCH --job-name=BRB_SEQ
+#SBATCH --output=BRB_SEQ_%A_%a.out
+#SBATCH --error=BRB_SEQ_%A_%a.err
+#SBATCH --array=1-12%12
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=75000
+#SBATCH --mail-type=END,FAIL
 
-# Placeholder SLURM wrapper for Stage 1 of the BRB pipeline.
-# This script should call src/brb_pipeline/stage1.py once the implementation is ready.
-
-if [ "$#" -lt 2 ]; then
-    echo "Usage: $0 <config.yaml> <sample-index>"
+if [ "$#" -ne 1 ]; then
+    echo "Usage: $0 <config.yaml>"
     exit 1
 fi
 
 CONFIG="$1"
-SAMPLE_INDEX="$2"
 
-python -m brb_pipeline.stage1 "$CONFIG" "$SAMPLE_INDEX"
+# Activate the shared mamba environment for the BRB pipeline.
+# You must initialize mamba in your .bashrc for this to work.
+eval "$(mamba shell.bash hook)"
+mamba activate /ref/bmlab/software/envs/brb_pipeline
+
+python src/brb_pipeline/stage1.py "$CONFIG" "$SLURM_ARRAY_TASK_ID"

@@ -92,3 +92,9 @@ rather than requiring manual path entry.
 - Pipeline environment: /ref/bmlab/software/envs/brb_pipeline
 - Create once, activated per run in SLURM wrapper scripts
 - Never install per-run; never delete after run
+
+## Environment activation
+- SLURM jobs do not source ~/.bashrc automatically
+- run_stage1.sh and run_stage2.sh use eval + mamba activate for safety
+- All lab members must have mamba initialized in ~/.bashrc
+- Do not remove the eval line without confirming SLURM behavior on HTCF
