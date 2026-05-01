@@ -18,5 +18,5 @@ CONFIG="$1"
 eval "$(mamba shell hook --shell bash)"
 mamba activate /ref/bmlab/software/envs/brb_pipeline
 
-PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PIPELINE_DIR=/ref/bmlab/software/brb_python_2026/BRB_Pipeline
 python "$PIPELINE_DIR/src/brb_pipeline/stage2.py" "$CONFIG"
