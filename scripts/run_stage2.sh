@@ -15,7 +15,8 @@ fi
 CONFIG="$1"
 
 # Activate the shared mamba environment for the BRB pipeline.
-eval "$(mamba shell.bash hook)"
+eval "$(mamba shell hook --shell bash)"
 mamba activate /ref/bmlab/software/envs/brb_pipeline
 
-python src/brb_pipeline/stage2.py "$CONFIG"
+PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+python "$PIPELINE_DIR/src/brb_pipeline/stage2.py" "$CONFIG"

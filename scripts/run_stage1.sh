@@ -16,7 +16,8 @@ CONFIG="$1"
 
 # Activate the shared mamba environment for the BRB pipeline.
 # You must initialize mamba in your .bashrc for this to work.
-eval "$(mamba shell.bash hook)"
+eval "$(mamba shell hook --shell bash)"
 mamba activate /ref/bmlab/software/envs/brb_pipeline
 
-python src/brb_pipeline/stage1.py "$CONFIG" "$SLURM_ARRAY_TASK_ID"
+PIPELINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+python "$PIPELINE_DIR/src/brb_pipeline/stage1.py" "$CONFIG" "$SLURM_ARRAY_TASK_ID"
