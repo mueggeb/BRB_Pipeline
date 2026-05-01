@@ -15,22 +15,44 @@ logger = logging.getLogger(__name__)
 _dry_run = False
 
 
-def _run_command(cmd, **kwargs):
+def _run_command(cmd, stdout=None, stderr=None, **kwargs):
     """
     Execute a command or print it in dry-run mode.
+
+    stdout and stderr accept Path objects and will be opened automatically,
+    since subprocess.run requires open file objects rather than paths.
 
     Parameters
     ----------
     cmd : list
         Command as list of strings (for subprocess.run).
+    stdout : Path, str, or special constant, optional
+        Where to send stdout. Path/str values are opened as files.
+    stderr : Path, str, or special constant, optional
+        Where to send stderr. Path/str values are opened as files.
     **kwargs
-        Additional arguments to pass to subprocess.run.
+        Additional arguments to pass to subprocess.run (e.g. check, text).
     """
     global _dry_run
     if _dry_run:
         logger.info(f"[DRY RUN] {' '.join(str(c) for c in cmd)}")
         return
-    subprocess.run(cmd, **kwargs)
+
+    file_mode = 'w' if kwargs.get('text', False) else 'wb'
+    open_files = []
+    try:
+        if isinstance(stdout, (str, Path)):
+            f = open(stdout, file_mode)
+            open_files.append(f)
+            stdout = f
+        if isinstance(stderr, (str, Path)):
+            f = open(stderr, file_mode)
+            open_files.append(f)
+            stderr = f
+        subprocess.run(cmd, stdout=stdout, stderr=stderr, **kwargs)
+    finally:
+        for f in open_files:
+            f.close()
 
 
 def _makedirs(path):
@@ -194,6 +216,9 @@ def cleanup_stage2(project_dir, remove_intermediate):
 
     for pattern in cleanup_patterns:
         for path in project_dir.glob(pattern):
+            if _dry_run:
+                logger.info(f"[DRY RUN] rm {path}")
+                continue
             try:
                 if path.is_dir():
                     shutil.rmtree(path)

@@ -18,6 +18,9 @@ def _run_command(cmd, **kwargs):
     """
     Execute a command or print it in dry-run mode.
 
+    Accepts Path or str for stdout/stderr kwargs and opens them as files,
+    since subprocess.run requires file objects, not paths.
+
     Parameters
     ----------
     cmd : list
@@ -29,7 +32,25 @@ def _run_command(cmd, **kwargs):
     if _dry_run:
         logger.info(f"[DRY RUN] {' '.join(str(c) for c in cmd)}")
         return
-    subprocess.run(cmd, **kwargs)
+
+    file_mode = 'w' if kwargs.get('text', False) else 'wb'
+    stdout = kwargs.pop('stdout', None)
+    stderr = kwargs.pop('stderr', None)
+
+    open_files = []
+    try:
+        if isinstance(stdout, (str, Path)):
+            f = open(stdout, file_mode)
+            open_files.append(f)
+            stdout = f
+        if isinstance(stderr, (str, Path)):
+            f = open(stderr, file_mode)
+            open_files.append(f)
+            stderr = f
+        subprocess.run(cmd, stdout=stdout, stderr=stderr, **kwargs)
+    finally:
+        for f in open_files:
+            f.close()
 
 
 def _makedirs(path):
