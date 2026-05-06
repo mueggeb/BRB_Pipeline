@@ -185,11 +185,6 @@ def demultiplex_by_barcode(barcode, sample_name, index1_paths, index2_paths,
             intermediate.unlink()
             logger.info(f"Removed intermediate: {intermediate}")
 
-    # Compute MD5 checksum
-    md5_file = str(final_output) + ".md5sum"
-    md5_cmd = ["md5sum", str(final_output)]
-    _run_command(md5_cmd, stdout=md5_file, check=True)
-
     logger.info(f"Demultiplexing complete. Output: {final_output}")
     return final_output
 
@@ -293,6 +288,7 @@ def trim_adapters(read2_path, sample_name, project_dir, cpus_per_task):
     read2_path = Path(read2_path)
     output_trimmed = cutadapt_dir / f"{sample_name}_temp_trimmed.fq.gz"
     log_file = cutadapt_dir / f"{sample_name}_AdapterTrim.log"
+    json_file = cutadapt_dir / f"{sample_name}_AdapterTrim.json"
 
     cmd = [
         "cutadapt",
@@ -300,6 +296,7 @@ def trim_adapters(read2_path, sample_name, project_dir, cpus_per_task):
         "--minimum-length=25",
         "-o", str(output_trimmed),
         "-j", str(cpus_per_task),
+        "--json", str(json_file),
         str(read2_path),
     ]
 
@@ -361,6 +358,7 @@ def trim_polyA(read2_path, sample_name, project_dir, cpus_per_task):
     read2_path = Path(read2_path)
     output_trimmed = cutadapt_dir / f"{sample_name}_trimmed.fq.gz"
     log_file = cutadapt_dir / f"{sample_name}_polyA.log"
+    json_file = cutadapt_dir / f"{sample_name}_polyA.json"
 
     cmd = [
         "cutadapt",
@@ -369,6 +367,7 @@ def trim_polyA(read2_path, sample_name, project_dir, cpus_per_task):
         "--minimum-length=25",
         "-o", str(output_trimmed),
         "-j", str(cpus_per_task),
+        "--json", str(json_file),
         str(read2_path),
     ]
 

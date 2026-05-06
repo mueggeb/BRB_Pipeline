@@ -1,0 +1,426 @@
+config.py
+Read the CLAUDE.md file and the associated files in this repo. I'm currently trying to debug the following error that gets triggered in the dry_run mode. Help me fix this bug
+
+(brb_pipeline) mueggeb@n019:/scratch/bmlab/mueggeb/projects/BRB_Python_Scratch$ python /ref/bmlab/software/brb_python_2026/BRB_Pipeline/src/brb_pipeline/stage1.py /ref/bmlab/software/brb_python_2026/BRB_Pipeline/examples/config_test.yaml 1 --dry-run
+Traceback (most recent call last):
+  File "/ref/bmlab/software/brb_python_2026/BRB_Pipeline/src/brb_pipeline/stage1.py", line 789, in <module>
+    main(args.config, args.sample_index, dry_run=args.dry_run)
+  File "/ref/bmlab/software/brb_python_2026/BRB_Pipeline/src/brb_pipeline/stage1.py", line 736, in main
+    read2_input = demultiplex_by_barcode(
+  File "/ref/bmlab/software/brb_python_2026/BRB_Pipeline/src/brb_pipeline/stage1.py", line 163, in demultiplex_by_barcode
+    intermediate.unlink()
+  File "/ref/bmlab/software/envs/brb_pipeline/lib/python3.10/pathlib.py", line 1206, in unlink
+    self._accessor.unlink(self)
+FileNotFoundError: [Errno 2] No such file or directory: '/scratch/bmlab/mueggeb/projects/BRB_Python_Scratch/cutadapt/Nff37i_LIB133722-DIL01_23FMG2LT3_S1_L005_R2_001.fq.gz'
+Show more
+Let me read the relevant files to understand the bug.
+
+Read stage1.py (lines 141-180)
+Read stage1.py (lines 81-145)
+Now let me look at the _run_command function to understand how dry_run is handled there, and then look at where the intermediate.unlink() is called relative to the dry_run guard.
+
+Bash Find dry_run usage and _run_command definition in stage1.py
+IN
+grep -n "dry_run\|_run_command\|def demultiplex" /Users/mueggeb/bin/BRB_Pipeline/src/brb_pipeline/stage1.py | head -60
+
+OUT
+14:_dry_run = False
+17:def _run_command(cmd, **kwargs):
+28:    global _dry_run
+29:    if _dry_run:
+44:    global _dry_run
+46:    if _dry_run:
+52:def demultiplex_by_barcode(barcode, sample_name, index1_paths, index2_paths, 
+136:            _run_command(
+155:    _run_command(
+169:    _run_command(md5_cmd, stdout=md5_file, check=True)
+220:        _run_command(
+286:        _run_command(
+355:        _run_command(
+425:        _run_command(
+494:        _run_command(
+551:        _run_command(
+605:        _run_command(
+665:        _run_command(
+711:def main(config_path, sample_index, dry_run=False):
+713:    global _dry_run
+714:    _dry_run = dry_run
+789:    main(args.config, args.sample_index, dry_run=args.dry_run)
+Read stage1.py (lines 15-69)
+The bug is clear. In demultiplex_by_barcode, the intermediate.unlink() call on line 163 is not guarded by _dry_run, but in dry_run mode the cutadapt commands are skipped so the intermediate files are never created — yet the code still tries to delete them.
+
+The fix is to wrap the cleanup loop with a dry_run check, consistent with how _makedirs and _run_command handle it. Also, the md5sum command after the concat should be checked the same way (it already goes through _run_command, so that's fine). Let me also check if the cat concat step's return value matters for the unlink — in dry_run it never runs either.
+
+Edit stage1.py
+Added 1 line
+The fix is a one-liner: the intermediate file cleanup in demultiplex_by_barcode was not guarded by _dry_run. In dry_run mode, the cutadapt commands are skipped (via _run_command), so the intermediate .fq.gz files are never created — but the code still tried to call .unlink() on them, causing the FileNotFoundError.
+
+The fix wraps the cleanup loop in if not _dry_run:, matching the same pattern already used by _run_command and _makedirs.
+
+Think about the other steps in the stage1.py file. Will they have similar problems in dry_run mode?
+Let me read the full file to audit every step.
+
+Read stage1.py
+There is one more problem. All other steps route filesystem side effects through _run_command or _makedirs, which are already dry_run-safe. The exception is cleanup_intermediates (lines 680–709).
+
+The problem: cleanup_intermediates calls path.unlink() directly without checking _dry_run. It won't crash in dry_run mode (because the path.exists() guard saves it when files were never created), but if you run --dry-run against a directory that already has real output from a previous run, it will actually delete those files. That's the opposite of dry_run behavior.
+
+The fix is the same pattern — guard the deletions with if not _dry_run:
+
+Edit stage1.py
+Added 3 lines
+Every other function only touches the filesystem via _run_command or _makedirs, both of which already short-circuit in dry_run mode. Those are safe.
+
+Summary of the two dry_run file-deletion bugs:
+
+Location	Bug	Crash?
+demultiplex_by_barcode line 162	intermediate.unlink() not guarded — files never created in dry_run	Yes — FileNotFoundError
+cleanup_intermediates line 703	path.unlink() not guarded — silently deletes real files from a prior run	No crash, but destructive
+Both are now fixed.
+
+stage1.py
+"What does dry-run mode do in stage1.py? Where does it send output?"
+Dry-run mode prevents all real execution and filesystem writes. Here's exactly what it does:
+
+How it works: main() sets the module-level _dry_run = True, which two helper functions check:
+
+_run_command (stage1.py:29-31): skips subprocess.run entirely — no tool (cutadapt, STAR, featureCounts, etc.) is executed.
+_makedirs (stage1.py:46-48): skips path.mkdir — no directories are created.
+cleanup_intermediates (stage1.py:703-704): skips path.unlink — no files are deleted.
+Where output goes: Everything goes to the Python logger (logger.info). Each skipped action is logged with a [DRY RUN] prefix, e.g.:
+
+
+[DRY RUN] mkdir -p /scratch/.../cutadapt
+[DRY RUN] cutadapt -g=^ATCG -e 0.15 ...
+[DRY RUN] rm /scratch/.../STAR/sample_SJ.out.tab
+The logger itself is not configured inside stage1.py — it uses the standard logging.getLogger(__name__) and relies on whatever logging setup the caller provides. When run directly via python stage1.py, no handler is configured, so by default log messages go nowhere unless the root logger has a handler set up. If you want to see the dry-run output when running directly, you'd add logging.basicConfig(level=logging.INFO) to the if __name__ == "__main__" block.
+
+If I called this command, would I capture the output of dry run to a file?
+
+python stage1.py ... --dry-run > dry_run_output.txt 2>&1
+cat dry_run_output.txt
+No. The logging module sends to stderr by default — but only if a handler is configured. As mentioned, stage1.py never calls logging.basicConfig() or adds any handler, so the root logger has no handler and all log messages are silently dropped. dry_run_output.txt would be empty.
+
+To fix this, add logging.basicConfig to the __main__ block:
+
+Read stage1.py (lines 775-791)
+Edit stage1.py
+Added 3 lines
+With this in place, your command would work:
+
+
+python stage1.py ... --dry-run > dry_run_output.txt 2>&1
+Log messages go to stderr, which 2>&1 redirects into the file alongside any stdout. The > dry_run_output.txt alone (without 2>&1) would still give you an empty file.
+
+When I run the code as an sbatch submission on my SLURM server, I get these errors about mamba submission
+
+mueggeb@login:/scratch/bmlab/mueggeb/projects/BRB_Python_Scratch$ cat BRB_SEQ_39767976_1.out 
+
+'mamba' is running as a subprocess and can't modify the parent shell.
+Thus you must initialize your shell before using activate and deactivate.
+
+To initialize the current bash shell, run:
+    $ eval "$(mamba shell hook --shell bash)"
+and then activate or deactivate with:
+    $ mamba activate
+To automatically initialize all future (bash) shells, run:
+    $ mamba shell init --shell bash --root-prefix=~/.local/share/mamba
+If your shell was already initialized, reinitialize your shell with:
+    $ mamba shell reinit --shell bash
+Otherwise, this may be an issue. In the meantime you can run commands. See:
+    $ mamba run --help
+
+Supported shells are {bash, zsh, csh, posix, xonsh, cmd.exe, powershell, fish, nu}.
+
+mueggeb@login:/scratch/bmlab/mueggeb/projects/BRB_Python_Scratch$ cat BRB_SEQ_39767976_1.err 
+The following arguments were not expected: shell.bash hook
+Run with --help for more information.
+critical libmamba Shell not initialized
+python: can't open file '/scratch/bmlab/mueggeb/projects/BRB_Python_Scratch/src/brb_pipeline/stage1.py': [Errno 2] No such file or directory
+
+The messages have a slightly different eval $(mamba ... line than you have in run_stage1.sh. Is that the problem, or is this error stemming from something else?
+Let me look at the SLURM wrapper script and the config to understand both errors.
+
+Bash Find shell scripts in the pipeline
+IN
+find /Users/mueggeb/bin/BRB_Pipeline -name "run_stage1.sh" -o -name "*.sh" | head -20
+
+OUT
+/Users/mueggeb/bin/BRB_Pipeline/scripts/Multiplex_BRB_Align_Counts_240125.sh
+/Users/mueggeb/bin/BRB_Pipeline/scripts/run_stage1.sh
+/Users/mueggeb/bin/BRB_Pipeline/scripts/BRB_MultiQC_FullRun_240116.sh
+/Users/mueggeb/bin/BRB_Pipeline/scripts/BRB_Seq_Muegge_241112_TwoStage_noMulti.sh
+/Users/mueggeb/bin/BRB_Pipeline/scripts/run_stage2.sh
+/Users/mueggeb/bin/BRB_Pipeline/scripts/BRB_MultiQC_SpikeIn_240116.sh
+Read run_stage1.sh
+Two separate bugs, not one:
+
+Bug 1 — mamba syntax: Your cluster's mamba version uses shell hook --shell bash, not the older shell.bash hook. The .err file confirms this: The following arguments were not expected: shell.bash hook.
+
+Bug 2 — relative path: Line 22 runs python src/brb_pipeline/stage1.py — a path relative to wherever sbatch was called from. SLURM jobs inherit the submission directory (/scratch/bmlab/mueggeb/projects/BRB_Python_Scratch), and there's no src/ there. The pipeline lives at /ref/bmlab/software/brb_python_2026/BRB_Pipeline/. The mamba failure masks this, but you'd hit it immediately after fixing mamba.
+
+Both fixes:
+
+Edit run_stage1.sh
+Added 1 line
+PIPELINE_DIR resolves to the repo root by walking one level up from the script's own location, so the path to stage1.py is always correct regardless of where you run sbatch from. Check run_stage2.sh — it likely has the same two issues.
+
+Read run_stage2.sh
+Same two bugs, as expected:
+
+Edit run_stage2.sh
+Added 1 line
+Both scripts are now fixed. After pushing to the cluster, test with a quick dry-run submission to confirm mamba activates cleanly before running a real job.
+
+That resolved the mamba errors. Now I'm getting an error message with a single line: python: can't open file '/var/spool/slurmd/src/brb_pipeline/stage1.py': [Errno 2] No such file or directory
+The BASH_SOURCE[0] trick doesn't work with sbatch — SLURM copies the script to its spool directory before running it, so dirname resolves to /var/spool/slurmd instead of the actual script location.
+
+Since the pipeline is a fixed installation on the cluster, the right fix is to hardcode the path, consistent with how /ref/bmlab/software/envs/brb_pipeline is already hardcoded in the same scripts:
+
+Edit run_stage1.sh
+Modified
+Edit run_stage2.sh
+Modified
+This is the same pattern already used for the environment path — fixed cluster installations use fixed paths. If you ever move or update the pipeline, PIPELINE_DIR is the one line to change in each script.
+
+mueggeb@login:/scratch/bmlab/mueggeb/projects/BRB_Python_Scratch$ less BRB_SEQ_39768631_1.err 
+
+INFO __main__: Loading config from examples/config_test_JL005_fiveSample.yaml
+INFO __main__: Starting Stage 1 for sample Nff37i (index 1/5)
+INFO __main__: Demultiplexing with barcode ACCGCTCCTACAAG: /lts/bmlab/bmlab_1/mueggeb/projects/JL005_Liu/data/SR010407/LIB133722-DIL01_23FMG2LT3_S1_L005_R2_001.fastq.gz
+Traceback (most recent call last):
+  File "/ref/bmlab/software/brb_python_2026/BRB_Pipeline/src/brb_pipeline/stage1.py", line 796, in <module>
+    main(args.config, args.sample_index, dry_run=args.dry_run)
+  File "/ref/bmlab/software/brb_python_2026/BRB_Pipeline/src/brb_pipeline/stage1.py", line 740, in main
+    read2_input = demultiplex_by_barcode(
+  File "/ref/bmlab/software/brb_python_2026/BRB_Pipeline/src/brb_pipeline/stage1.py", line 136, in demultiplex_by_barcode
+    _run_command(
+  File "/ref/bmlab/software/brb_python_2026/BRB_Pipeline/src/brb_pipeline/stage1.py", line 32, in _run_command
+    subprocess.run(cmd, **kwargs)
+  File "/ref/bmlab/software/envs/brb_pipeline/lib/python3.10/subprocess.py", line 503, in run
+    with Popen(*popenargs, **kwargs) as process:
+  File "/ref/bmlab/software/envs/brb_pipeline/lib/python3.10/subprocess.py", line 837, in __init__
+    errread, errwrite) = self._get_handles(stdin, stdout, stderr)
+  File "/ref/bmlab/software/envs/brb_pipeline/lib/python3.10/subprocess.py", line 1638, in _get_handles
+    c2pwrite = stdout.fileno()
+AttributeError: 'PosixPath' object has no attribute 'fileno'
+
+I confirmed that dry-run still works as expected (at least when I am on an interactive node with the environment loaded). Help me understand and resolve this error
+The error is separate from dry_run — subprocess.run doesn't accept a Path (or str) for stdout/stderr; it needs an actual open file object. This affects every _run_command call that redirects output to a file. The right fix is to handle it once in _run_command itself rather than touching every call site.
+
+Read stage1.py (lines 18-32)
+Edit stage1.py
+Added 21 lines
+A few things worth knowing about this fix:
+
+Why file_mode: The concat (cat) command writes a .fq.gz file with no text=True, so it needs 'wb' (binary). All other redirected outputs use text=True and get 'w' (text). The mode is derived from the kwargs automatically.
+Why isinstance(stdout, (str, Path)): This correctly skips over subprocess.STDOUT (which is the integer -2) passed as stderr in the cutadapt calls, so those are left alone.
+Why try/finally: If the command fails and raises CalledProcessError, the opened files are still closed cleanly.
+The same bug exists in stage2.py if it uses the same _run_command pattern — worth checking.
+
+stage1.py
+Three things. (1) please fix this bug in stage2.py as well. (2) Is this specific to cutadapt, or is this a more general part of the script dealing with the run mode (dry-run or similar). (3) I never saw an error like this in my original bash script. What has changed in this python implementation that let us into this error? Remember that my goal is to have code that is reliable but maintainable by biology graduate students without software engineering training. The calls to kwargs and subprocess.run seem a little complicated
+Let me read stage2.py first.
+
+Read stage2.py
+Two issues to fix in stage2.py: the _run_command bug (same as stage1), and cleanup_stage2 also has the dry_run deletion bug. Let me fix both, then answer your three questions.
+
+Edit stage2.py
+Added 22 lines
+Edit stage2.py
+Added 3 lines
+Now the three questions:
+
+1. Is this specific to cutadapt?
+
+No. Every tool that redirects output to a file had the same bug — cutadapt just happened to be first in the pipeline. FastQC, featureCounts, bam_stat.py, read_distribution.py, and MultiQC would all have crashed the same way on their turn.
+
+2. Why didn't your bash script have this problem?
+
+In bash, the > and 2> redirect operators are handled by the shell before the program starts. The shell opens the file and hands the program an already-open file descriptor. The program itself never sees a filename — just an open pipe.
+
+
+cutadapt ... > logfile.txt   # shell opens logfile.txt, cutadapt never knows its name
+In Python, calling subprocess.run() directly bypasses the shell entirely. Python doesn't interpret > — it just launches the program. So you become responsible for opening the file yourself and handing it in. That's what the fixed _run_command now does.
+
+3. Is the fix too complicated for biology students to maintain?
+
+The complexity is deliberately isolated to _run_command. The domain functions (run_fastqc, trim_adapters, etc.) don't change — a student adding a new pipeline step just calls _run_command the same way every other step does:
+
+
+_run_command(cmd, stdout=log_file, stderr=subprocess.STDOUT, check=True, text=True)
+They don't need to understand the internals of _run_command to use it correctly. The docstring now explains that Path objects are accepted for stdout/stderr, which is all a caller needs to know. The open_files/try/finally machinery inside is a one-time implementation detail.
+
+The job is running on my server without errors so far. But it is much slower than my bash implementation. The code is still in the cutadapt demultiplexing step. It's been about 15 minutes, and no output has been written yet. My bash code completes this step in 1 or 2 minutes and makes a fastq file. Is there a difference in the python implementation, perhaps with i/o handling, that explains this?
+Let me read the original bash script to compare what cutadapt is actually doing differently.
+
+Read BRB_Seq_Muegge_241112_TwoStage_noMulti.sh
+Found it. Look at lines 162–163 of the bash script:
+
+
+eval $(spack load --sh pigz@2.6)
+The bash script explicitly loads pigz (parallel gzip) before running cutadapt. The Python pipeline doesn't — it just activates the mamba environment and runs cutadapt directly.
+
+This matters because cutadapt uses pigz when --cores > 1 to compress the output .fq.gz file in parallel. Without pigz in PATH, cutadapt falls back to Python's built-in gzip module, which is single-threaded and significantly slower. For a large FASTQ file, compression is the bottleneck — this is consistent with a 10-15x slowdown.
+
+The fix is to ensure pigz is installed in the mamba environment. On the cluster:
+
+
+mamba install -n brb_pipeline -c conda-forge pigz
+Then verify it's visible:
+
+
+mamba run -n brb_pipeline which pigz
+You don't need any code changes — once pigz is in the environment, cutadapt will find it automatically when --cores 4 is set. The bash script worked because it loaded pigz explicitly via spack; the mamba environment just needs it installed once.
+
+Two other things worth checking while you're at it:
+
+Confirm cpus_per_task in the config matches your SLURM allocation. The bash script used ${SLURM_CPUS_PER_TASK} directly from SLURM; the Python version reads it from the YAML. If the config says 1 instead of 4, cutadapt won't parallelize at all.
+
+Cutadapt version: bash uses py-cutadapt@2.10 via spack. Check what's in your mamba environment (cutadapt --version) — a significantly different version could have different default behavior.
+
+Now I'm using cutadapt version 5.2. Think about that version compared to 2.10 (as my bash script uses). Is there anything I should change in the cutadapt call? This may not be limited to compression issues, perhaps there are other improvements or options that would improve my adapter trimming and polyA removal
+I can give you a confident answer on some things and an honest "check the changelog" on others. Let me go through each step.
+
+Demultiplexing (-g=^{barcode})
+
+No meaningful changes. Anchored 5' matching, --no-indels, and --discard-untrimmed work identically in 5.2. The --cores flag is the same as -j — both still work.
+
+Adapter trimming
+
+The parameters are still correct, but there's one concrete improvement: since cutadapt 3.0, logs can be written as JSON (--json), which MultiQC parses more reliably than the plain-text log format. Since your pipeline already depends on MultiQC for aggregation, this is worth switching to. Update trim_adapters and trim_polyA to write a JSON report alongside the text log.
+
+PolyA trimming — this is where I'd be cautious
+
+The current call uses --adapter="A{30}" --overlap=15. This still works in 5.2, but the error rate calculation for partial adapter matches changed between 2.x and 3.x: in 2.10 the allowed mismatches were computed relative to adapter length; in 3.x+ they're computed relative to the overlap length. With --overlap=15, that means with default -e 0.1, you'd allow 1 mismatch in a 15-base overlap. Your current polyA call doesn't pass -e, so it uses the default — which may behave differently than it did in 2.10. Worth verifying in the changelog whether the effective stringency changed for your use case.
+
+What I'd recommend checking directly
+
+Run cutadapt --help on the cluster and look for --poly-a. Later cutadapt versions (I believe 4.x+) added a dedicated --poly-a flag that handles 3'-end poly-A tails more robustly than the A{30} homopolymer adapter approach, but I'm not certain of the exact version it appeared in. If it's available in 5.2, it would be cleaner to use.
+
+Summary of concrete changes worth making
+
+Add --json output to both cutadapt steps, directed at a JSON file in the cutadapt directory. MultiQC will automatically pick it up. In stage1.py, that means adding "--json", str(json_file) to the trim_adapters and trim_polyA commands. The demultiplexing step produces less useful metrics for MultiQC, so the JSON there matters less.
+
+The one thing I'd avoid doing without testing: changing the polyA step's error rate or overlap settings without comparing output read counts against your bash run. Those are parameters where a small change silently affects how many reads pass through.
+
+Version 5.2 does include the --poly-a option.
+
+Even outside of the full pipeline, what is the bakeoff? For a given demultiplexed fastq file, run my original polyA call and then separately run cutadapt with the --poly-a option and compare the output log files? Can you give me the exact command you would recommend for each including the relative log or json output for manual review. I think mostly I will compare the number of reads impacted and remaining, right?
+Yes, that's exactly the right comparison — reads trimmed and reads passing the length filter are the key numbers. Here are the exact commands:
+
+Original approach (homopolymer adapter):
+
+
+cutadapt \
+    --adapter="A{30}" \
+    --overlap=15 \
+    --minimum-length=25 \
+    -j 4 \
+    --json polya_original.json \
+    -o polya_original_trimmed.fq.gz \
+    your_sample_temp_trimmed.fq.gz \
+    > polya_original.log
+New --poly-a approach:
+
+
+cutadapt \
+    --poly-a \
+    --minimum-length=25 \
+    -j 4 \
+    --json polya_new.json \
+    -o polya_new_trimmed.fq.gz \
+    your_sample_temp_trimmed.fq.gz \
+    > polya_new.log
+Use your_sample_temp_trimmed.fq.gz (the adapter-trimmed file from the previous step) as input to both — that's the correct stage in the pipeline where polyA trimming happens.
+
+The text logs are the easiest thing to read side-by-side. The numbers you care about:
+
+
+Reads with adapters:    X (Y%)    ← sensitivity: how many poly-A tails were detected
+Reads written:          X (Y%)    ← what passes to STAR
+Reads discarded:        X (Y%)    ← lost to minimum-length filter
+--poly-a will likely report more reads trimmed at lower sensitivity thresholds because its algorithm is designed for variable-length poly-A stretches rather than matching a fixed 30-base pattern. The question is whether it also increases or decreases the reads discarded by --minimum-length=25 — if it's over-aggressively trimming short A-runs at the 3' end of reads that aren't true poly-A tails, you'll see reads discarded go up.
+
+The JSON files will have the same information in structured form, but for manual review the text log is easier. You don't need both — the --json flag is mainly useful once you settle on an approach and want MultiQC to parse the results consistently.
+
+Several updates:
+1) drop md5 checksum steps from demultiplexing. This is legacy that I don't need to keep
+2) Make sure that the slurm call for run_stage1.sh requests at least 3-4 hours per job. We usually don't need this, but if the cluster is very full sometimes jobs take more than the default 1 hour
+3) Add the json output for cutadapt as you suggested
+Show less
+Let me read the current state of both files before editing.
+
+Read stage1.py (lines 151-180)
+Read run_stage1.sh
+Read stage1.py (lines 179-198)
+Read stage1.py (lines 291-370)
+Read stage1.py (lines 369-393)
+Now I have everything I need. Three edits across two files.
+
+Edit run_stage1.sh
+Added 1 line
+Edit stage1.py
+Removed 5 lines
+Now add --json to both cutadapt trimming steps:
+
+Edit stage1.py
+Added 2 lines
+Edit stage1.py
+Added 2 lines
+Three changes made:
+
+md5sum removed from demultiplex_by_barcode — the four lines are gone, no other changes to that function.
+
+--time=4:00:00 added to run_stage1.sh. Note that run_stage2.sh doesn't need this since it's a quick aggregation job, but let me know if you want a time limit there too.
+
+--json added to both trim_adapters and trim_polyA. The JSON files land in the same cutadapt/ directory as the text logs, named {sample}_AdapterTrim.json and {sample}_polyA.json. MultiQC will pick them up automatically from that directory when stage 2 runs.
+
+I've run several files through cutadapt to test the different polyA strategies. Now I want to run them through star to see if the alignment rates are different. Give me the star commands I need. I will compare mapping rates in the star log.
+Let me check the config so I can use the real STAR index path rather than a placeholder.
+
+Bash Find config files with STAR index path
+IN
+find /Users/mueggeb/bin/BRB_Pipeline/examples -name "*.yaml" | xargs grep -l "star" 2>/dev/null
+
+OUT
+/Users/mueggeb/bin/BRB_Pipeline/examples/example_multiqc_template.yaml
+/Users/mueggeb/bin/BRB_Pipeline/examples/example_config.yaml
+/Users/mueggeb/bin/BRB_Pipeline/examples/config_test_JL005_fiveSample.yaml
+/Users/mueggeb/bin/BRB_Pipeline/examples/config_test.yaml
+Bash Get STAR index path from the five-sample config
+IN
+grep "star\|Star\|STAR" /Users/mueggeb/bin/BRB_Pipeline/examples/config_test_JL005_fiveSample.yaml
+
+OUT
+  star_index: /ref/rmlab/data/references/Mus_musculus/Ensembl/GRCm38/Sequence/STAR_2.7.6a
+Here are the two commands, using the same parameters the pipeline uses:
+
+Original polyA trimming output:
+
+
+STAR \
+    --runThreadN 4 \
+    --genomeDir /ref/rmlab/data/references/Mus_musculus/Ensembl/GRCm38/Sequence/STAR_2.7.6a \
+    --readFilesCommand zcat \
+    --readFilesIn polya_original_trimmed.fq.gz \
+    --outSAMtype BAM SortedByCoordinate \
+    --outFilterMultimapNmax 1 \
+    --outFileNamePrefix star_original_
+--poly-a trimming output:
+
+
+STAR \
+    --runThreadN 4 \
+    --genomeDir /ref/rmlab/data/references/Mus_musculus/Ensembl/GRCm38/Sequence/STAR_2.7.6a \
+    --readFilesCommand zcat \
+    --readFilesIn polya_new_trimmed.fq.gz \
+    --outSAMtype BAM SortedByCoordinate \
+    --outFilterMultimapNmax 1 \
+    --outFileNamePrefix star_new_
+After both finish, compare the two log files:
+
+
+grep -E "Uniquely mapped reads %|% of reads mapped to too many loci|% of reads unmapped" \
+    star_original_Log.final.out star_new_Log.final.out
+The three lines you care about are uniquely mapped %, multi-mapper %, and unmapped %. Since --outFilterMultimapNmax 1 discards multi-mappers, the real signal is whether uniquely mapped % goes up and unmapped (too short) % goes down with the better polyA strategy.
